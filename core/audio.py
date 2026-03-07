@@ -1,11 +1,11 @@
 """Audio manager for graduated alerts."""
 
 try:
-    import pygame.mixer
-    import pygame.sndarray
-    PYGAME_AVAILABLE = True
+ import pygame.mixer
+ import pygame.sndarray
+ PYGAME_AVAILABLE = True
 except ImportError:
-    PYGAME_AVAILABLE = False
+ PYGAME_AVAILABLE = False
 
 import numpy as np
 import time
@@ -17,11 +17,28 @@ import config
 class AudioManager:
     """Graduated audio feedback manager."""
 
+    # Debug flag - set to True to see audio debug messages
+    DEBUG = True
+
     def __init__(self, enabled: bool = config.AUDIO_ENABLED):
         self.enabled = enabled and PYGAME_AVAILABLE and config.AUDIO_ENABLED
         self.last_beep_time = 0
         self.current_risk = 0
         self.is_initialized = False
+
+        # Debug: Report audio status
+        if not PYGAME_AVAILABLE:
+            if self.DEBUG:
+                print("[AUDIO] Disabled: pygame not available")
+        elif not config.AUDIO_ENABLED:
+            if self.DEBUG:
+                print("[AUDIO] Disabled: AUDIO_ENABLED = False in config")
+        elif not enabled:
+            if self.DEBUG:
+                print("[AUDIO] Disabled: disabled by parameter")
+        else:
+            if self.DEBUG:
+                print("[AUDIO] Initializing...")
 
         if self.enabled:
             try:
@@ -32,13 +49,16 @@ class AudioManager:
                     buffer=config.AUDIO_BUFFER
                 )
                 self.is_initialized = True
+                if self.DEBUG:
+                    print("[AUDIO] Initialized successfully - playing test sound")
+                # Play test sound to verify audio works
+                self.play_test_beep()
             except Exception as e:
-                print(f"Audio initialization failed: {e}")
+                print(f"[AUDIO] ERROR: Initialization failed: {e}")
                 self.enabled = False
 
-    def generate_tone(self, frequency: float, duration_ms: int,
-                     volume: float = 0.5) -> np.ndarray:
-        """Generate a tone as numpy array."""
+    def generate_tone(self, frequency: float, duration_ms: int, volume: float = 0.5) -> np.ndarray:
+        """Generate a tone as numpy array (2D for stereo compatibility)."""
         sample_count = int(duration_ms * config.AUDIO_SAMPLE_RATE / 1000)
         t = np.linspace(0, duration_ms / 1000, sample_count)
 
@@ -55,20 +75,48 @@ class AudioManager:
 
         wave *= envelope * volume
 
-        # Convert to 16-bit PCM
-        return (wave * 32767).astype(np.int16)
+        # Convert to 16-bit PCM and reshape for stereo compatibility
+        wave_int16 = (wave * 32767).astype(np.int16)
+
+        # pygame.sndarray expects (samples, channels) or (channels, samples) depending on mixer
+        # For stereo mixer, we need 2D array - duplicate mono to both channels
+        # Shape should be (sample_count, channels)
+        wave_2d = np.column_stack([wave_int16, wave_int16])
+
+        return wave_2d
 
     def play_sound(self, frequency: float, duration_ms: int):
         """Play a sound."""
         if not self.enabled or not self.is_initialized:
-            return
+            return False
 
         try:
             sound_data = self.generate_tone(frequency, duration_ms)
             sound = pygame.sndarray.make_sound(sound_data)
             sound.play()
+            return True
         except Exception as e:
-            pass
+            print(f"[AUDIO] ERROR: Failed to play sound: {e}")
+            return False
+
+    def play_test_beep(self):
+        """Play a test beep to verify audio is working."""
+        if not self.enabled or not self.is_initialized:
+            if self.DEBUG:
+                print("[AUDIO] Cannot play test beep: not initialized")
+            return False
+
+        try:
+            # Play a pleasant 660Hz tone for 150ms
+            sound_data = self.generate_tone(660, 150, 0.3)
+            sound = pygame.sndarray.make_sound(sound_data)
+            sound.play()
+            if self.DEBUG:
+                print("[AUDIO] Test beep played successfully")
+            return True
+        except Exception as e:
+            print(f"[AUDIO] ERROR: Test beep failed: {e}")
+            return False
 
     def update(self, risk_score: float):
         """
@@ -104,6 +152,9 @@ class AudioManager:
                 config.AUDIO_FREQ_MAX - config.AUDIO_FREQ_MIN
             )
 
+            if self.DEBUG:
+                print(f"[AUDIO] BEEP: risk={risk_score:.1f}, freq={frequency:.0f}Hz")
+
             self.play_sound(frequency, config.AUDIO_DURATION_MS)
             self.last_beep_time = current_time
 
@@ -117,7 +168,7 @@ class AudioManager:
         """Play danger alert sound."""
         if not self.enabled:
             return
-        # Double beep
+        # Double beep for danger
         self.play_sound(880, 200)
         time.sleep(0.1)
         self.play_sound(880, 200)

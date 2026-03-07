@@ -47,7 +47,7 @@ def run_calibration(display: DisplayManager,
     calibrator.start()
     profile_generated = False
 
-    while calibrator.status not in ['complete', 'failed']:
+    while not calibrator.is_complete() and not calibrator.is_failed():
         ret, frame = camera.read()
         if not ret:
             print("Camera error during calibration")
@@ -181,6 +181,9 @@ def main():
         key = display.get_key()
         if key == config.KEY_QUIT:
             running = False
+        elif key == config.KEY_TEST_BEEP:
+            print("\nPlaying test beep...")
+            audio.play_test_beep()
         elif key == config.KEY_CALIBRATE:
             print("\nRecalibrating...")
             display.show(display.create_waiting_frame())

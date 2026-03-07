@@ -11,6 +11,9 @@ from detectors import FaceAnalyzer
 from calibration.driver_profile import DriverProfile
 import config
 
+# Debug flag - set to True to see calibration debug messages
+DEBUG = True
+
 
 class CalibrationStatus(Enum):
     """Calibration status states."""
@@ -36,12 +39,15 @@ class CalibrationData:
 class Calibrator:
     """30-second calibration phase."""
 
+    # Debug flag
+    DEBUG = True
+
     def __init__(self, duration_sec: int = config.CALIBRATION_DURATION_SEC):
         self.duration_sec = duration_sec
         self.status = CalibrationStatus.IDLE
 
         # Data collection buffers
-        self.ear_values: deque = deque(maxlen=900)      # 30 sec at 30fps
+        self.ear_values: deque = deque(maxlen=900)  # 30 sec at 30fps
         self.mar_values: deque = deque(maxlen=900)
         self.yaw_values: deque = deque(maxlen=900)
         self.pitch_values: deque = deque(maxlen=900)
@@ -65,7 +71,7 @@ class Calibrator:
         self._reset_data()
         self.status = CalibrationStatus.WAITING
         self.start_time = time.time()
-        print(f"Calibration started. Duration: {self.duration_sec} seconds")
+        print(f"[CALIB] Calibration started. Duration: {self.duration_sec} seconds")
         return True
 
     def _reset_data(self):
@@ -80,9 +86,7 @@ class Calibrator:
         self.total_frames = 0
 
     def process_frame(self, frame: np.ndarray,
-                     eye_result=None,
-                     mouth_result=None,
-                     head_pose=None) -> tuple:
+                      eye_result=None, mouth_result=None, head_pose=None) -> tuple:
         """
         Process a frame during calibration.
 
@@ -101,13 +105,13 @@ class Calibrator:
             self.face_detected_frames += 1
 
             # Collect EAR values
-            if eye_result:
+            if eye_result and eye_result.avg_ear > 0:
                 self.ear_values.append(eye_result.avg_ear)
                 if eye_result.is_blinking:
                     self.blink_times.append(time.time())
 
             # Collect MAR values
-            if mouth_result:
+            if mouth_result and mouth_result.mar > 0:
                 self.mar_values.append(mouth_result.mar)
 
             # Collect head pose values
@@ -115,6 +119,12 @@ class Calibrator:
                 self.yaw_values.append(head_pose.yaw)
                 self.pitch_values.append(head_pose.pitch)
                 self.roll_values.append(head_pose.roll)
+
+        # Debug output every 60 frames (~2 seconds)
+        if self.DEBUG and self.total_frames % 60 == 0:
+            face_rate = self.face_detected_frames / max(1, self.total_frames) * 100
+            print(f"[CALIB] Frame {self.total_frames}: EAR={len(self.ear_values)}, "
+                  f"MAR={len(self.mar_values)}, Face={face_rate:.1f}%")
 
         # Calculate progress
         elapsed = time.time() - self.start_time
@@ -124,12 +134,15 @@ class Calibrator:
         # Check completion
         if elapsed >= self.duration_sec:
             if self.status != CalibrationStatus.COMPLETE:
+                if self.DEBUG:
+                    print(f"[CALIB] Collection complete! EAR={len(self.ear_values)}, "
+                          f"MAR={len(self.mar_values)} samples collected")
                 self.status = CalibrationStatus.PROCESSING
                 self.end_time = time.time()
 
-            if self.status == CalibrationStatus.PROCESSING:
-                # Auto-complete after processing
-                self.status = CalibrationStatus.COMPLETE
+        if self.status == CalibrationStatus.PROCESSING:
+            # Auto-complete after processing
+            self.status = CalibrationStatus.COMPLETE
 
         return self.status, progress, time_remaining
 
@@ -141,14 +154,21 @@ class Calibrator:
             DriverProfile or None if insufficient data
         """
         if len(self.ear_values) < 30:
-            print("Insufficient data for calibration")
+            print("[CALIB] ERROR: Insufficient EAR data for calibration "
+                  f"(need 30, got {len(self.ear_values)})")
+            self.status = CalibrationStatus.FAILED
+            return None
+
+        if len(self.mar_values) < 30:
+            print("[CALIB] ERROR: Insufficient MAR data for calibration "
+                  f"(need 30, got {len(self.mar_values)})")
             self.status = CalibrationStatus.FAILED
             return None
 
         # Face detection rate check
         face_detect_rate = self.face_detected_frames / max(1, self.total_frames)
         if face_detect_rate < 0.5:
-            print(f"Low face detection rate: {face_detect_rate:.1%}")
+            print(f"[CALIB] ERROR: Low face detection rate: {face_detect_rate:.1%}")
             self.status = CalibrationStatus.FAILED
             return None
 
@@ -194,17 +214,28 @@ class Calibrator:
                 calibration_date=datetime.datetime.now().isoformat()
             )
 
+            if self.DEBUG:
+                print(f"[CALIB] Profile generated successfully!")
+                print(f"  EAR: mean={profile.ear_mean:.3f}, std={profile.ear_std:.3f}, "
+                      f"closed_thresh={profile.ear_closed_threshold:.3f}")
+                print(f"  MAR: mean={profile.mar_mean:.3f}, std={profile.mar_std:.3f}, "
+                      f"yawn_thresh={profile.mar_yawn_threshold:.3f}")
+
             self.status = CalibrationStatus.COMPLETE
             return profile
 
         except Exception as e:
-            print(f"Calibration failed: {e}")
+            print(f"[CALIB] ERROR: Calibration failed: {e}")
             self.status = CalibrationStatus.FAILED
             return None
 
     def is_complete(self) -> bool:
         """Check if calibration is complete."""
         return self.status == CalibrationStatus.COMPLETE
+
+    def is_failed(self) -> bool:
+        """Check if calibration failed."""
+        return self.status == CalibrationStatus.FAILED
 
     def get_summary(self) -> dict:
         """Get calibration summary statistics."""
@@ -213,7 +244,7 @@ class Calibrator:
             'duration': self.duration_sec,
             'frames_collected': len(self.ear_values),
             'face_detection_rate': (self.face_detected_frames /
-                                   max(1, self.total_frames)),
+                                    max(1, self.total_frames)),
             'ear_mean': float(np.mean(list(self.ear_values))) if self.ear_values else 0,
             'mar_mean': float(np.mean(list(self.mar_values))) if self.mar_values else 0
         }

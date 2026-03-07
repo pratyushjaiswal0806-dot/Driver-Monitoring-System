@@ -1,0 +1,21 @@
+{
+  "driver_id": "default",
+  "ear_mean": 0.3602831849099031,
+  "ear_std": 0.024537969602019472,
+  "ear_closed_threshold": 0.3112072457058641,
+  "blink_rate": 2,
+  "blink_duration": 0.3,
+  "mar_mean": 0.022713121122862192,
+  "mar_std": 0.024412639640732266,
+  "mar_yawn_threshold": 0.08374472022469286,
+  "yaw_center": -175.61454800951492,
+  "yaw_std": 0.31589843825834524,
+  "pitch_center": 6.717868132498894,
+  "pitch_std": 2.294572050018121,
+  "roll_center": 8.586739459296082,
+  "roll_std": 1.1061457019506706,
+  "head_yaw_threshold": 30,
+  "head_pitch_threshold": 25,
+  "is_calibrated": true,
+  "calibration_date": "2026-03-08T00:25:13.869816"
+}
