@@ -1,0 +1,227 @@
+"""Calibrator for 30-second driver signature learning."""
+
+from enum import Enum
+import numpy as np
+from typing import Optional, List
+from collections import deque
+import time
+from dataclasses import dataclass
+
+from detectors import FaceAnalyzer
+from calibration.driver_profile import DriverProfile
+import config
+
+
+class CalibrationStatus(Enum):
+    """Calibration status states."""
+    IDLE = "idle"
+    WAITING = "waiting"
+    COLLECTING = "collecting"
+    PROCESSING = "processing"
+    COMPLETE = "complete"
+    FAILED = "failed"
+
+
+@dataclass
+class CalibrationData:
+    """Collected raw calibration data."""
+    ear_values: List[float]
+    mar_values: List[float]
+    yaw_values: List[float]
+    pitch_values: List[float]
+    roll_values: List[float]
+    blink_times: List[float]
+
+
+class Calibrator:
+    """30-second calibration phase."""
+
+    def __init__(self, duration_sec: int = config.CALIBRATION_DURATION_SEC):
+        self.duration_sec = duration_sec
+        self.status = CalibrationStatus.IDLE
+
+        # Data collection buffers
+        self.ear_values: deque = deque(maxlen=900)      # 30 sec at 30fps
+        self.mar_values: deque = deque(maxlen=900)
+        self.yaw_values: deque = deque(maxlen=900)
+        self.pitch_values: deque = deque(maxlen=900)
+        self.roll_values: deque = deque(maxlen=900)
+        self.blink_times: List[float] = []
+
+        # Timing
+        self.start_time: Optional[float] = None
+        self.end_time: Optional[float] = None
+
+        # Face detection during calibration
+        self.face_analyzer = FaceAnalyzer()
+        self.face_detected_frames = 0
+        self.total_frames = 0
+
+    def start(self) -> bool:
+        """Start calibration process."""
+        if self.status == CalibrationStatus.COLLECTING:
+            return False
+
+        self._reset_data()
+        self.status = CalibrationStatus.WAITING
+        self.start_time = time.time()
+        print(f"Calibration started. Duration: {self.duration_sec} seconds")
+        return True
+
+    def _reset_data(self):
+        """Reset all collection buffers."""
+        self.ear_values.clear()
+        self.mar_values.clear()
+        self.yaw_values.clear()
+        self.pitch_values.clear()
+        self.roll_values.clear()
+        self.blink_times.clear()
+        self.face_detected_frames = 0
+        self.total_frames = 0
+
+    def process_frame(self, frame: np.ndarray,
+                     eye_result=None,
+                     mouth_result=None,
+                     head_pose=None) -> tuple:
+        """
+        Process a frame during calibration.
+
+        Returns:
+            Tuple of (status, progress_0_to_1, time_remaining)
+        """
+        if self.status == CalibrationStatus.IDLE:
+            return CalibrationStatus.IDLE, 0.0, 0
+
+        self.total_frames += 1
+
+        # Process face detection
+        face_data = self.face_analyzer.process(frame)
+
+        if face_data:
+            self.face_detected_frames += 1
+
+            # Collect EAR values
+            if eye_result:
+                self.ear_values.append(eye_result.avg_ear)
+                if eye_result.is_blinking:
+                    self.blink_times.append(time.time())
+
+            # Collect MAR values
+            if mouth_result:
+                self.mar_values.append(mouth_result.mar)
+
+            # Collect head pose values
+            if head_pose:
+                self.yaw_values.append(head_pose.yaw)
+                self.pitch_values.append(head_pose.pitch)
+                self.roll_values.append(head_pose.roll)
+
+        # Calculate progress
+        elapsed = time.time() - self.start_time
+        progress = min(elapsed / self.duration_sec, 1.0)
+        time_remaining = max(0, int(self.duration_sec - elapsed))
+
+        # Check completion
+        if elapsed >= self.duration_sec:
+            if self.status != CalibrationStatus.COMPLETE:
+                self.status = CalibrationStatus.PROCESSING
+                self.end_time = time.time()
+
+            if self.status == CalibrationStatus.PROCESSING:
+                # Auto-complete after processing
+                self.status = CalibrationStatus.COMPLETE
+
+        return self.status, progress, time_remaining
+
+    def generate_profile(self, driver_id: str = "default") -> Optional[DriverProfile]:
+        """
+        Generate driver profile from collected data.
+
+        Returns:
+            DriverProfile or None if insufficient data
+        """
+        if len(self.ear_values) < 30:
+            print("Insufficient data for calibration")
+            self.status = CalibrationStatus.FAILED
+            return None
+
+        # Face detection rate check
+        face_detect_rate = self.face_detected_frames / max(1, self.total_frames)
+        if face_detect_rate < 0.5:
+            print(f"Low face detection rate: {face_detect_rate:.1%}")
+            self.status = CalibrationStatus.FAILED
+            return None
+
+        try:
+            # Calculate statistics
+            ear_array = np.array(list(self.ear_values))
+            mar_array = np.array(list(self.mar_values))
+            yaw_array = np.array(list(self.yaw_values))
+            pitch_array = np.array(list(self.pitch_values))
+            roll_array = np.array(list(self.roll_values))
+
+            # Create profile
+            import datetime
+            profile = DriverProfile(
+                driver_id=driver_id,
+
+                # Eye metrics
+                ear_mean=float(np.mean(ear_array)),
+                ear_std=float(np.std(ear_array)),
+                ear_closed_threshold=float(np.mean(ear_array) - 2 * np.std(ear_array)),
+                blink_rate=len(self.blink_times),
+                blink_duration=0.3,  # Default, can be improved
+
+                # Mouth metrics
+                mar_mean=float(np.mean(mar_array)),
+                mar_std=float(np.std(mar_array)),
+                mar_yawn_threshold=float(np.mean(mar_array) + 2.5 * np.std(mar_array)),
+
+                # Head pose metrics
+                yaw_center=float(np.mean(yaw_array)),
+                yaw_std=float(np.std(yaw_array)),
+                pitch_center=float(np.mean(pitch_array)),
+                pitch_std=float(np.std(pitch_array)),
+                roll_center=float(np.mean(roll_array)),
+                roll_std=float(np.std(roll_array)),
+
+                # Derived thresholds
+                head_yaw_threshold=config.DEFAULT_HEAD_YAW_THRESHOLD,
+                head_pitch_threshold=config.DEFAULT_HEAD_PITCH_THRESHOLD,
+
+                # Status
+                is_calibrated=True,
+                calibration_date=datetime.datetime.now().isoformat()
+            )
+
+            self.status = CalibrationStatus.COMPLETE
+            return profile
+
+        except Exception as e:
+            print(f"Calibration failed: {e}")
+            self.status = CalibrationStatus.FAILED
+            return None
+
+    def is_complete(self) -> bool:
+        """Check if calibration is complete."""
+        return self.status == CalibrationStatus.COMPLETE
+
+    def get_summary(self) -> dict:
+        """Get calibration summary statistics."""
+        return {
+            'status': self.status.value,
+            'duration': self.duration_sec,
+            'frames_collected': len(self.ear_values),
+            'face_detection_rate': (self.face_detected_frames /
+                                   max(1, self.total_frames)),
+            'ear_mean': float(np.mean(list(self.ear_values))) if self.ear_values else 0,
+            'mar_mean': float(np.mean(list(self.mar_values))) if self.mar_values else 0
+        }
+
+    def skip(self):
+        """Skip calibration."""
+        self.status = CalibrationStatus.FAILED
+
+    def release(self):
+        """Release resources."""
+        self.face_analyzer.release()
