@@ -11,7 +11,9 @@ import config
 class RiskLevel(Enum):
     """Risk level classifications."""
     SAFE = "safe"
+    MILD = "mild"
     WARNING = "warning"
+    HIGH = "high"
     DANGER = "danger"
 
 
@@ -31,9 +33,13 @@ class RiskScore:
         """Get color for current risk level."""
         if self.level == RiskLevel.SAFE:
             return config.COLOR_SAFE
+        elif self.level == RiskLevel.MILD:
+            return (100, 255, 100)  # Light green
         elif self.level == RiskLevel.WARNING:
             return config.COLOR_WARNING
-        else:
+        elif self.level == RiskLevel.HIGH:
+            return (0, 0, 255)  # Red
+        else:  # DANGER
             return config.COLOR_DANGER
 
     def get_status_text(self) -> str:
@@ -197,13 +203,14 @@ class RiskScorer:
 
     def _get_risk_level(self, score: float) -> RiskLevel:
         """Determine risk level from score."""
-        safe_max = config.RISK_THRESHOLDS['safe'][1]
-        danger_min = config.RISK_THRESHOLDS['danger'][0]
-
-        if score < safe_max:
+        if score < config.RISK_THRESHOLDS['mild'][0]:
             return RiskLevel.SAFE
-        elif score < danger_min:
+        elif score < config.RISK_THRESHOLDS['warning'][0]:
+            return RiskLevel.MILD
+        elif score < config.RISK_THRESHOLDS['high'][0]:
             return RiskLevel.WARNING
+        elif score < config.RISK_THRESHOLDS['danger'][0]:
+            return RiskLevel.HIGH
         else:
             return RiskLevel.DANGER
 

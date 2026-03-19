@@ -78,17 +78,22 @@ HEAD_AWAY_ALERT_FRAMES = 45                        # ~1.5 seconds
 # =============================================================================
 # RISK SCORING
 # =============================================================================
+# Increased weights so single issues can trigger higher risk alerts
 RISK_WEIGHTS = {
-    'phone': 40,
-    'drowsy': 40,
-    'yawning': 20,
-    'looking_away': 20
+    'phone': 55,      # Phone: up to 55% risk alone
+    'drowsy': 55,     # Drowsy: up to 55% risk alone
+    'yawning': 35,    # Yawning: up to 35% risk alone
+    'looking_away': 35  # Looking away: up to 35% risk alone
 }
+# Total: 180 max (capped at 100)
 
+# Risk thresholds for UI display (0-20 Safe, 20-40 Mild, 40-60 Warning, 60-80 High, 80-100 Critical)
 RISK_THRESHOLDS = {
-    'safe': (0, 30),
-    'warning': (30, 60),
-    'danger': (60, 100)
+    'safe': (0, 20),
+    'mild': (20, 40),
+    'warning': (40, 60),
+    'high': (60, 80),
+    'danger': (80, 100)
 }
 
 # =============================================================================
@@ -103,7 +108,48 @@ AUDIO_BUFFER = 2048
 AUDIO_FREQ_MIN = 440          # Hz (A4)
 AUDIO_FREQ_MAX = 880          # Hz (A5)
 AUDIO_DURATION_MS = 200
-AUDIO_VOLUME = 0.5
+AUDIO_VOLUME = 0.9  # Loud enough to wake someone
+
+# =============================================================================
+# DRIVER ALERT BEEP SYSTEM
+# =============================================================================
+# Risk Score Levels:
+#   0-20: Safe      - No sound, display only
+#   20-40: Mild     - Beep every 6s, 800Hz, 200ms
+#   40-60: Warning  - "beep beep" every 3s, 1200Hz, 250ms
+#   60-80: High     - "beep beep beep" every 2s, 1800Hz, 300ms
+#   80-100: Critical - Continuous "beep beep beep beep", 2500Hz, 400ms
+
+BEEP_CONFIG = {
+    'mild': {
+        'interval': 6.0,
+        'frequency': 800,
+        'duration_ms': 200,
+        'count': 1,
+    },
+    'warning': {
+        'interval': 3.0,
+        'frequency': 1200,
+        'duration_ms': 250,
+        'count': 2,
+    },
+    'high_risk': {
+        'interval': 2.0,
+        'frequency': 1800,
+        'duration_ms': 300,
+        'count': 3,
+    },
+    'critical': {
+        'interval': 0.0,  # Continuous (no pause between beep groups)
+        'frequency': 2500,
+        'duration_ms': 400,
+        'count': 4,
+    },
+}
+
+# Screen flash settings for critical alert
+CRITICAL_FLASH_ENABLED = True
+CRITICAL_FLASH_INTERVAL = 0.5  # Flash every 0.5 seconds
 
 # Beep intervals by risk level (seconds between beeps)
 AUDIO_INTERVALS = {
