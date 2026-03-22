@@ -21,10 +21,10 @@ CALIBRATION_COUNTDOWN_MSG = "Starting calibration in {}..."
 # Default thresholds (used when calibration is skipped)
 DEFAULT_EAR_THRESHOLD = 0.25                 # Eyes open threshold
 DEFAULT_EAR_CLOSED_THRESHOLD = 0.20          # Eyes closed threshold
-DEFAULT_MAR_THRESHOLD = 0.35                 # Normal mouth at rest
-DEFAULT_MAR_YAWN_THRESHOLD = 0.70            # Yawning threshold
-DEFAULT_HEAD_YAW_THRESHOLD = 30              # degrees - looking left/right
-DEFAULT_HEAD_PITCH_THRESHOLD = 25            # degrees - looking down
+# degrees - looking left/right (increased from 30)
+DEFAULT_HEAD_YAW_THRESHOLD = 40
+# degrees - looking down (increased from 25)
+DEFAULT_HEAD_PITCH_THRESHOLD = 35
 
 # Profile storage
 PROFILE_DIR = os.path.join(os.path.dirname(__file__), 'profiles')
@@ -48,12 +48,6 @@ YOLO_PHONE_CLASS_NAMES = ['cell phone', 'phone', 'mobile phone']
 LEFT_EYE_INDICES = [33, 160, 158, 133, 153, 144]
 RIGHT_EYE_INDICES = [362, 385, 387, 263, 373, 380]
 
-# Mouth (for MAR calculation)
-MOUTH_TOP = 13        # Upper lip center
-MOUTH_BOTTOM = 14     # Lower lip center
-MOUTH_LEFT = 78       # Left mouth corner
-MOUTH_RIGHT = 308     # Right mouth corner
-
 # Head pose (PnP model points)
 FACE_MODEL_POINTS = [
     1,      # Nose tip
@@ -67,12 +61,12 @@ FACE_MODEL_POINTS = [
 # =============================================================================
 # TEMPORAL SMOOTHING
 # =============================================================================
-SMOOTHING_ALPHA = 0.3                              # EWMA smoothing factor
+# EWMA smoothing factor (higher = more responsive)
+SMOOTHING_ALPHA = 0.6
 ALERT_TRIGGER_FRAMES = 30                          # ~1 second at 30fps
 BLINK_MIN_FRAMES = 3                               # Minimum blink duration
 BLINK_MAX_FRAMES = 12                              # Maximum normal blink
 EYES_CLOSED_ALERT_FRAMES = 60                      # ~2 seconds
-MOUTH_OPEN_ALERT_FRAMES = 30                       # ~1 second
 HEAD_AWAY_ALERT_FRAMES = 45                        # ~1.5 seconds
 
 # =============================================================================
@@ -82,10 +76,9 @@ HEAD_AWAY_ALERT_FRAMES = 45                        # ~1.5 seconds
 RISK_WEIGHTS = {
     'phone': 55,      # Phone: up to 55% risk alone
     'drowsy': 55,     # Drowsy: up to 55% risk alone
-    'yawning': 35,    # Yawning: up to 35% risk alone
-    'looking_away': 35  # Looking away: up to 35% risk alone
+    'looking_away': 15  # Looking away: up to 15% risk alone (reduced from 35)
 }
-# Total: 180 max (capped at 100)
+# Total: 125 max (capped at 100)
 
 # Risk thresholds for UI display (0-20 Safe, 20-40 Mild, 40-60 Warning, 60-80 High, 80-100 Critical)
 RISK_THRESHOLDS = {
@@ -113,51 +106,16 @@ AUDIO_VOLUME = 0.9  # Loud enough to wake someone
 # =============================================================================
 # DRIVER ALERT BEEP SYSTEM
 # =============================================================================
-# Risk Score Levels:
-#   0-20: Safe      - No sound, display only
-#   20-40: Mild     - Beep every 6s, 800Hz, 200ms
-#   40-60: Warning  - "beep beep" every 3s, 1200Hz, 250ms
-#   60-80: High     - "beep beep beep" every 2s, 1800Hz, 300ms
-#   80-100: Critical - Continuous "beep beep beep beep", 2500Hz, 400ms
-
-BEEP_CONFIG = {
-    'mild': {
-        'interval': 6.0,
-        'frequency': 800,
-        'duration_ms': 200,
-        'count': 1,
-    },
-    'warning': {
-        'interval': 3.0,
-        'frequency': 1200,
-        'duration_ms': 250,
-        'count': 2,
-    },
-    'high_risk': {
-        'interval': 2.0,
-        'frequency': 1800,
-        'duration_ms': 300,
-        'count': 3,
-    },
-    'critical': {
-        'interval': 0.0,  # Continuous (no pause between beep groups)
-        'frequency': 2500,
-        'duration_ms': 400,
-        'count': 4,
-    },
-}
+# Risk Score Levels with automated audio feedback:
+#   0-20: Safe      - No sound
+#   20-40: Mild     - Single beep every 3s at 800Hz
+#   40-60: Warning  - Double beep every 1.5s at 1200Hz
+#   60-80: High     - Triple beep every 0.8s at 1600Hz
+#   80-100: Critical - Quad beep every 0.3s at 2000Hz
 
 # Screen flash settings for critical alert
 CRITICAL_FLASH_ENABLED = True
 CRITICAL_FLASH_INTERVAL = 0.5  # Flash every 0.5 seconds
-
-# Beep intervals by risk level (seconds between beeps)
-AUDIO_INTERVALS = {
-    'safe': float('inf'),     # No beeps
-    'warning': 2.0,           # Every 2 seconds
-    'danger': 1.0,            # Every 1 second
-    'critical': 0.3           # Every 0.3 seconds
-}
 
 # =============================================================================
 # DISPLAY SETTINGS
@@ -218,3 +176,40 @@ KEY_CALIBRATE = ord('c')
 KEY_RESET = ord('r')
 KEY_PAUSE = ord('p')
 KEY_TEST_BEEP = ord('b')
+KEY_LOGBOOK_CONSOLE = ord('l')  # Print console statistics
+KEY_LOGBOOK_EXPORT = ord('e')   # Export to CSV
+
+# =============================================================================
+# MOUTH DETECTION SETTINGS (for yawn detection if re-enabled)
+# =============================================================================
+# Face landmark indices for mouth (MediaPipe Face Mesh)
+MOUTH_TOP = 13      # Top of mouth
+MOUTH_BOTTOM = 14   # Bottom of mouth
+MOUTH_LEFT = 78     # Left mouth corner
+MOUTH_RIGHT = 308   # Right mouth corner
+DEFAULT_MAR_THRESHOLD = 0.35    # Mouth aspect ratio threshold
+DEFAULT_MAR_YAWN_THRESHOLD = 0.70  # Yawn threshold (higher than open mouth)
+MOUTH_OPEN_ALERT_FRAMES = 30    # Frames before alerting on open mouth
+
+# =============================================================================
+# LOGBOOK SETTINGS
+# =============================================================================
+LOGBOOK_ENABLED = True
+LOGBOOK_DB_PATH = os.path.join(os.path.dirname(__file__), 'logs', 'alerts.db')
+LOGBOOK_AUTO_CLEANUP_DAYS = 30    # Delete alerts older than this many days
+LOGBOOK_SHOW_GUI_STATS = True     # Show stats overlay on video display
+LOGBOOK_LOG_ALL_ALERTS = True     # Log every risk level (not just transitions)
+
+# =============================================================================
+# HEALTH ANALYZER SETTINGS
+# =============================================================================
+HEALTH_ANALYZER_ENABLED = True    # Enable health issue detection feature
+HEALTH_ANALYSIS_DAYS = 7          # Analyze last N days of alert data
+HEALTH_SEVERITY_THRESHOLDS = {
+    'low': 0.4,       # 40% score threshold for LOW severity
+    'medium': 0.6,    # 60% score threshold for MEDIUM severity
+    'high': 0.8       # 80% score threshold for HIGH severity
+}
+
+# Key binding for health report
+KEY_HEALTH_REPORT = ord('h')      # Press [H] to show health analysis report

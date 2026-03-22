@@ -51,7 +51,7 @@ class DisplayManager:
             frame: Original camera frame
             risk_score: Current risk score
             detections: Detection results dictionary
-            landmarks: Optional face landmarks
+            landmarks: Optional face landmarks (always drawn)
             show_overlay: Whether to show UI overlay
 
         Returns:
@@ -59,17 +59,19 @@ class DisplayManager:
         """
         display = frame.copy()
 
+        # Always draw face mesh when landmarks are available
+        if landmarks is not None:
+            from utils.visualization import draw_face_mesh
+            display = draw_face_mesh(display, landmarks,
+                                     line_color=(0, 255, 0),
+                                     point_color=(255, 0, 0))
+
         if show_overlay:
             # Draw risk bar at top
             display = draw_risk_bar(display, risk_score.total, x=10, y=10)
 
             # Draw status panel
             display = draw_status_panel(display, detections)
-
-            # Draw landmarks if enabled
-            if self.show_landmarks and landmarks is not None:
-                from utils.visualization import draw_face_landmarks
-                display = draw_face_landmarks(display, landmarks)
 
             # Draw timeline
             display = draw_timeline(display, risk_score.history)
@@ -88,7 +90,7 @@ class DisplayManager:
                 # Create semi-transparent red overlay
                 overlay = display.copy()
                 cv2.rectangle(overlay, (0, 0), (self.width, self.height),
-                             (0, 0, 255), -1)  # Full red rectangle
+                              (0, 0, 255), -1)  # Full red rectangle
                 # Blend with original frame (30% opacity)
                 display = cv2.addWeighted(overlay, 0.3, display, 0.7, 0)
 
@@ -119,7 +121,8 @@ class DisplayManager:
             return frame
 
         # Check if alert has expired
-        elapsed = (cv2.getTickCount() - self.alert_start_time) / cv2.getTickFrequency() * 1000
+        elapsed = (cv2.getTickCount() - self.alert_start_time) / \
+            cv2.getTickFrequency() * 1000
         if elapsed > 2000:  # 2 seconds
             self.alert_message = None
             return frame

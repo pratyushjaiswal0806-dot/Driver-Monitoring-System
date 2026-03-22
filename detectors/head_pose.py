@@ -82,20 +82,30 @@ class HeadPoseEstimator:
 
         self.dist_coeffs = np.zeros((4, 1))
 
-    def _get_image_points(self, landmarks: np.ndarray, frame_shape) -> np.ndarray:
-        """Extract 2D image points from landmarks."""
+    def _get_image_points(self, landmarks: np.ndarray, frame_shape) -> Optional[np.ndarray]:
+        """Extract 2D image points from landmarks with validation."""
         h, w = frame_shape[:2]
         image_points = []
 
         for idx in config.FACE_MODEL_POINTS:
+            # Bug fix: Validate landmark exists with proper NaN check
+            # MediaPipe returns normalized (0-1) coordinates, so 0 is valid
+            if idx >= len(landmarks):
+                return None  # Index out of bounds
+
             x = landmarks[idx][0]
             y = landmarks[idx][1]
+
+            # Check for NaN or out-of-bounds (< -0.1 or > 1.1 to account for rounding)
+            if np.isnan(x) or np.isnan(y) or x < -0.1 or x > 1.1 or y < -0.1 or y > 1.1:
+                return None  # Invalid landmark
+
             image_points.append([x * w, y * h])
 
         return np.array(image_points, dtype=np.float64)
 
     def estimate(self, landmarks: np.ndarray, frame_shape: tuple,
-                driver_profile=None) -> Optional[HeadPose]:
+                 driver_profile=None) -> Optional[HeadPose]:
         """
         Estimate head pose from landmarks.
 
@@ -114,8 +124,10 @@ class HeadPoseEstimator:
             self.baseline_pitch = driver_profile.pitch_center
             self.calibrated = True
 
-        # Get image points
+        # Get image points with validation
         image_points = self._get_image_points(landmarks, frame_shape)
+        if image_points is None:
+            return None  # Skip frame due to invalid landmarks
 
         try:
             # Solve PnP
@@ -134,7 +146,8 @@ class HeadPoseEstimator:
             rotation_mat, _ = cv2.Rodrigues(rotation_vec)
 
             # Calculate Euler angles
-            yaw, pitch, roll = self._rotation_matrix_to_euler_angles(rotation_mat)
+            yaw, pitch, roll = self._rotation_matrix_to_euler_angles(
+                rotation_mat)
 
             # Store for calibration
             if not self.calibrated:
@@ -152,7 +165,7 @@ class HeadPoseEstimator:
 
             # Calculate away duration
             away_duration = (self.away_tracker.consecutive_frames / config.TARGET_FPS
-                           if self.away_tracker.consecutive_frames > 0 else 0.0)
+                             if self.away_tracker.consecutive_frames > 0 else 0.0)
 
             return HeadPose(
                 yaw=yaw,
@@ -195,24 +208,20 @@ class HeadPoseEstimator:
         yaw_deviation = abs(yaw - self.baseline_yaw)
         pitch_deviation = abs(pitch - self.baseline_pitch)
 
-        # Check thresholds
-        looking_away = False
-        direction = HeadDirection.FRONT
+        # Front-facing when both deviations are inside thresholds.
+        if yaw_deviation <= self.yaw_threshold and pitch_deviation <= self.pitch_threshold:
+            return HeadDirection.FRONT, False
 
-        if yaw < self.baseline_yaw - self.yaw_threshold:
-            direction = HeadDirection.LEFT
-            looking_away = True
-        elif yaw > self.baseline_yaw + self.yaw_threshold:
-            direction = HeadDirection.RIGHT
-            looking_away = True
-        elif pitch > self.baseline_pitch + self.pitch_threshold:
-            direction = HeadDirection.DOWN
-            looking_away = True
-        elif pitch < self.baseline_pitch - self.pitch_threshold:
-            direction = HeadDirection.UP
-            looking_away = True
+        # Otherwise classify by the dominant axis so the display is consistent.
+        if yaw_deviation >= pitch_deviation and yaw_deviation > self.yaw_threshold:
+            direction = HeadDirection.LEFT if yaw < self.baseline_yaw else HeadDirection.RIGHT
+            return direction, True
 
-        return direction, looking_away
+        if pitch_deviation > self.pitch_threshold:
+            direction = HeadDirection.DOWN if pitch > self.baseline_pitch else HeadDirection.UP
+            return direction, True
+
+        return HeadDirection.FRONT, False
 
     def calibrate(self) -> dict:
         """Calculate calibration from collected pose history."""

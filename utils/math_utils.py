@@ -4,10 +4,38 @@ import numpy as np
 from typing import List, Tuple, Optional
 from collections import deque
 
+REFERENCE_IOD = 100.0
+
 
 def euclidean_distance(p1: np.ndarray, p2: np.ndarray) -> float:
     """Calculate Euclidean distance between two points."""
     return np.linalg.norm(p1 - p2)
+
+
+def calculate_iod(landmarks: np.ndarray) -> float:
+    """
+    Calculate the inter-ocular distance (IOD).
+
+    The IOD is the Euclidean distance between MediaPipe landmark 33
+    (left eye outer corner) and landmark 263 (right eye outer corner).
+
+    Args:
+        landmarks: Face mesh landmarks in normalized or pixel coordinates.
+
+    Returns:
+        Inter-ocular distance, or 1.0 if the value is invalid or zero.
+    """
+    if landmarks is None or len(landmarks) <= 263:
+        return 1.0
+
+    left_outer = np.asarray(landmarks[33], dtype=float)
+    right_outer = np.asarray(landmarks[263], dtype=float)
+    iod = float(np.linalg.norm(left_outer - right_outer))
+
+    if iod <= 1e-6:
+        return 1.0
+
+    return iod
 
 
 def calculate_ear(landmarks: np.ndarray, eye_indices: List[int]) -> float:
@@ -33,6 +61,10 @@ def calculate_ear(landmarks: np.ndarray, eye_indices: List[int]) -> float:
     if len(eye_indices) != 6:
         raise ValueError("eye_indices must contain exactly 6 points")
 
+    # Bug fix: Validate landmark indices before access
+    if any(i >= len(landmarks) for i in eye_indices):
+        return 0.0  # Invalid index
+
     # Get points
     p = [landmarks[i] for i in eye_indices]
 
@@ -46,6 +78,50 @@ def calculate_ear(landmarks: np.ndarray, eye_indices: List[int]) -> float:
 
     ear = (vertical_1 + vertical_2) / (2.0 * horizontal)
     return float(ear)
+
+
+def calculate_normalized_ear(
+    landmarks: np.ndarray,
+    eye_indices: Optional[List[int]] = None,
+    reference_iod: Optional[float] = None,
+) -> float:
+    """
+    Calculate a scale-stable EAR value using the inter-ocular distance.
+
+    EAR is already a ratio, so it is dimensionless. By default the function
+    returns the raw EAR so existing callers keep the same behavior. When a
+    `reference_iod` is provided, the result is adjusted against the current
+    inter-ocular distance to support personalized normalization.
+
+    Args:
+        landmarks: Face mesh landmarks.
+        eye_indices: Optional 6-point eye index list for one eye.
+        reference_iod: Optional reference IOD used for personalized scaling.
+
+    Returns:
+        Scale-stable EAR value.
+    """
+    current_iod = calculate_iod(landmarks)
+    if current_iod is None or current_iod <= 0:
+        current_iod = 1.0
+
+    if eye_indices is not None:
+        raw_ear = float(calculate_ear(landmarks, eye_indices))
+        if reference_iod is None:
+            return raw_ear
+        return float(raw_ear * (reference_iod / current_iod))
+
+    try:
+        import config
+
+        left_ear = calculate_ear(landmarks, config.LEFT_EYE_INDICES)
+        right_ear = calculate_ear(landmarks, config.RIGHT_EYE_INDICES)
+        raw_ear = float((left_ear + right_ear) / 2.0)
+        if reference_iod is None:
+            return raw_ear
+        return float(raw_ear * (reference_iod / current_iod))
+    except Exception:
+        return 0.0
 
 
 def calculate_mar(landmarks: np.ndarray, mar_indices: List[int]) -> float:
@@ -120,41 +196,51 @@ class TemporalSmoother:
 
 
 class StateDurationTracker:
-    """Track how long a state has been active."""
+    """Track how long a state has been active with hysteresis."""
 
-    def __init__(self, threshold_frames: int = 30):
-        self.threshold_frames = threshold_frames
-        self.state = False
+    def __init__(self, threshold_frames: int = 30, hysteresis_frames: int = 5):
+        self.threshold_frames = threshold_frames         # Frames to trigger alert
+        # Frames to clear alert after release
+        self.hysteresis_frames = hysteresis_frames
         self.consecutive_frames = 0
         self.triggered = False
 
     def update(self, current_state: bool) -> bool:
         """
-        Update with current state.
+        Update with current state using hysteresis to prevent flicker.
 
         Returns:
             True if state has persisted for threshold duration
         """
         if current_state:
+            # State is active: increment frame counter
             self.consecutive_frames += 1
-            if self.consecutive_frames >= self.threshold_frames:
+
+            # Trigger alert when threshold reached
+            if not self.triggered and self.consecutive_frames >= self.threshold_frames:
                 self.triggered = True
                 return True
+
+            return self.triggered
         else:
-            # Reset only if significant change happened
+            # State is inactive: apply hysteresis
             if self.triggered:
-                # Require some off-frames to clear triggered state
-                self.consecutive_frames = max(0, self.consecutive_frames - 5)
-                if self.consecutive_frames == 0:
+                # Still in triggered state, apply exit hysteresis
+                self.consecutive_frames = max(
+                    0, self.consecutive_frames - self.hysteresis_frames)
+
+                # Clear triggered state after hysteresis elapses
+                if self.consecutive_frames <= 0:
                     self.triggered = False
+                    self.consecutive_frames = 0
             else:
+                # Not triggered, reset counter immediately
                 self.consecutive_frames = 0
 
-        return self.triggered
+            return self.triggered
 
     def reset(self):
         """Reset the tracker."""
-        self.state = False
         self.consecutive_frames = 0
         self.triggered = False
 
@@ -202,9 +288,9 @@ def calculate_iou(box1: Tuple[float, float, float, float],
 
 
 def normalize_value(value: float,
-                   min_val: float,
-                   max_val: float,
-                   clip: bool = True) -> float:
+                    min_val: float,
+                    max_val: float,
+                    clip: bool = True) -> float:
     """
     Normalize a value to 0-1 range.
 

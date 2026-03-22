@@ -55,7 +55,14 @@ class AudioManager:
                 self.play_test_beep()
             except Exception as e:
                 print(f"[AUDIO] ERROR: Initialization failed: {e}")
+                # Bug fix: Properly cleanup mixer if initialization failed
+                try:
+                    if pygame.mixer.get_init():
+                        pygame.mixer.quit()
+                except Exception:
+                    pass
                 self.enabled = False
+                self.is_initialized = False
 
     def generate_tone(self, frequency: float, duration_ms: int, volume: float = 0.8) -> np.ndarray:
         """Generate a harsh tone that can wake someone up."""
@@ -142,7 +149,8 @@ class AudioManager:
         volume = getattr(config, 'BEEP_VOLUME', 0.9)
 
         if self.DEBUG:
-            print(f"[AUDIO] BEEP: {count}x, freq={frequency:.0f}Hz, dur={duration_ms}ms")
+            print(
+                f"[AUDIO] BEEP: {count}x, freq={frequency:.0f}Hz, dur={duration_ms}ms")
 
         for i in range(count):
             # Play with high volume
@@ -159,63 +167,50 @@ class AudioManager:
 
     def update(self, risk_score: float):
         """
-        Update audio based on risk score using Harsh Driver Alert Beeping System.
+        Update audio based on risk score - simplified beeping system.
 
-        Risk Score Levels (Harsh/Waking):
+        Risk Score Levels:
         - Safe (0-20): No sound
-        - Mild (20-40): Beep every 4s, 1200Hz, 300ms
-        - Warning (40-60): "beep beep" every 2s, 1800Hz, 350ms
-        - High Risk (60-80): "beep beep beep" every 1.2s, 2200Hz, 400ms
-        - Critical (80-100): Continuous alarm, 3000Hz, 500ms
+        - Mild (20-40): Single beep every 5s
+        - Warning (40-60): Double beep every 3s
+        - High Risk (60-80): Triple beep every 1.5s
+        - Critical (80-100): Quad beep every 0.5s
         """
         if not self.enabled:
             return
 
         self.current_risk = risk_score
         current_time = time.time()
-
-        # Determine risk level
-        risk_level = self._get_risk_level(risk_score)
-
-        if risk_level is None:
-            return  # Safe - no sound
-
-        # Use hardcoded harsh values to ensure waking capability
-        # (overrides config to guarantee harsh beeping)
-        if risk_level == 'mild':
-            interval = 4.0
-            frequency = 1200
-            duration_ms = 300
-            beep_count = 1
-        elif risk_level == 'warning':
-            interval = 2.0
-            frequency = 1800
-            duration_ms = 350
-            beep_count = 2
-        elif risk_level == 'high_risk':
-            interval = 1.2
-            frequency = 2200
-            duration_ms = 400
-            beep_count = 3
-        else:  # critical
-            interval = 0.0
-            frequency = 3000
-            duration_ms = 500
-            beep_count = 5
-
-        # Check if we should beep
         time_since_last = current_time - self.last_beep_time
 
-        if risk_level == 'critical':
-            # Continuous beeping - play continuously
-            if time_since_last >= duration_ms / 1000.0 + 0.05:
-                self._play_beep_group(frequency, duration_ms, beep_count)
-                self.last_beep_time = current_time
+        # Determine risk level and beep parameters
+        if risk_score < 20:
+            return  # Safe - no sound
+        elif risk_score < 40:
+            # Mild: 1 beep every 3s at 800Hz
+            interval = 3.0
+            frequency = 800
+            beep_count = 1
+        elif risk_score < 60:
+            # Warning: 2 beeps every 1.5s at 1200Hz
+            interval = 1.5
+            frequency = 1200
+            beep_count = 2
+        elif risk_score < 80:
+            # High Risk: 3 beeps every 0.8s at 1600Hz
+            interval = 0.8
+            frequency = 1600
+            beep_count = 3
         else:
-            # Beep at the specified interval
-            if time_since_last >= interval:
-                self._play_beep_group(frequency, duration_ms, beep_count)
-                self.last_beep_time = current_time
+            # Critical: 4 beeps every 0.3s at 2000Hz
+            interval = 0.3
+            frequency = 2000
+            beep_count = 4
+
+        # Play beep if interval has passed
+        if time_since_last >= interval:
+            self._play_beep_group(frequency, 200, beep_count)
+            self.last_beep_time = current_time
 
     def play_calibration_sound(self):
         """Play calibration complete sound."""

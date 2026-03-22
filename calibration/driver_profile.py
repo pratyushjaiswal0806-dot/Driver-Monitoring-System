@@ -19,13 +19,9 @@ class DriverProfile:
     ear_mean: float = config.DEFAULT_EAR_THRESHOLD
     ear_std: float = 0.02
     ear_closed_threshold: float = config.DEFAULT_EAR_CLOSED_THRESHOLD
+    baseline_iod: float = 100.0
     blink_rate: float = 15.0       # Blinks per minute
     blink_duration: float = 0.3    # Average blink duration in seconds
-
-    # Mouth measurements
-    mar_mean: float = config.DEFAULT_MAR_THRESHOLD
-    mar_std: float = 0.03
-    mar_yawn_threshold: float = config.DEFAULT_MAR_YAWN_THRESHOLD
 
     # Head pose measurements
     yaw_center: float = 0.0        # Center position (degrees)
@@ -47,7 +43,8 @@ class DriverProfile:
     def from_dict(cls, data: dict) -> 'DriverProfile':
         """Create profile from dictionary."""
         # Filter to only valid fields
-        valid_fields = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
+        valid_fields = {k: v for k,
+                        v in data.items() if k in cls.__dataclass_fields__}
         return cls(**valid_fields)
 
     def to_dict(self) -> dict:
@@ -57,7 +54,8 @@ class DriverProfile:
     def save(self, filepath: str = None) -> bool:
         """Save profile to JSON file."""
         if filepath is None:
-            filepath = os.path.join(config.PROFILE_DIR, f"{self.driver_id}.json")
+            filepath = os.path.join(
+                config.PROFILE_DIR, f"{self.driver_id}.json")
 
         try:
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -114,7 +112,7 @@ class DriverProfile:
     def get_head_pose_range(self) -> tuple:
         """Get normal head pose range."""
         yaw_range = (self.yaw_center - self.yaw_std * 2,
-                    self.yaw_center + self.yaw_std * 2)
+                     self.yaw_center + self.yaw_std * 2)
         pitch_range = (self.pitch_center - self.pitch_std * 2,
-                      self.pitch_center + self.pitch_std * 2)
+                       self.pitch_center + self.pitch_std * 2)
         return yaw_range, pitch_range

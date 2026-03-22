@@ -6,13 +6,110 @@ from typing import List, Tuple, Dict, Optional
 import config
 
 
+# MediaPipe Face Mesh connections (468 landmarks)
+FACE_MESH_CONNECTIONS = [
+    # Lips (20-27)
+    (0, 269), (270, 405), (269, 405), (421, 0),
+    # Contour (10-338)
+    (10, 338), (338, 297), (297, 332), (332, 284),
+    (284, 251), (251, 389), (389, 356), (356, 454),
+    (454, 323), (323, 361), (361, 288), (288, 397),
+    (397, 365), (365, 379), (379, 378), (378, 400),
+    (400, 377), (377, 152), (152, 148), (148, 176),
+    (176, 149), (149, 150), (150, 136), (136, 172),
+    (172, 58), (58, 132), (132, 93), (93, 234),
+    (234, 127), (127, 162), (162, 21), (21, 54),
+    (54, 103), (103, 67), (67, 109), (109, 10),
+]
+
+# Additional face mesh connections from MediaPipe
+FACE_MESH_FULL_CONNECTIONS = [
+    # Lips
+    (61, 146), (146, 91), (91, 181), (181, 84), (84,
+                                                 17), (17, 314), (314, 405), (405, 321),
+    (321, 375), (375, 291), (291, 61),
+    (78, 191), (191, 80), (80, 81), (81, 82), (82,
+                                               13), (13, 312), (312, 311), (311, 310),
+    (310, 415), (415, 308), (308, 324), (324,
+                                         318), (318, 402), (402, 317), (317, 14),
+    (14, 87), (87, 178), (178, 88), (88, 95),
+    # Face contour (very simplified for performance)
+    (10, 109), (109, 67), (67, 103), (103, 54), (54, 21), (21, 162), (162, 127),
+    (127, 234), (234, 93), (93, 132), (132, 58), (58, 172), (172, 136), (136, 150),
+    (150, 149), (149, 176), (176, 148), (148,
+                                         152), (152, 377), (377, 400), (400, 378),
+    (378, 379), (379, 365), (365, 397), (397,
+                                         288), (288, 361), (361, 323), (323, 454),
+    (454, 356), (356, 389), (389, 251), (251,
+                                         284), (284, 332), (332, 297), (297, 338),
+    (338, 10),
+    # Eyes (simplified)
+    (33, 7), (7, 163), (163, 144), (144, 145), (145, 153), (153, 154), (154, 155),
+    (155, 133), (133, 33),
+    (263, 249), (249, 390), (390, 373), (373,
+                                         374), (374, 380), (380, 381), (381, 382),
+    (382, 362), (362, 263),
+]
+
+
+def draw_face_mesh(frame: np.ndarray,
+                   landmarks: np.ndarray,
+                   line_color: Tuple[int, int, int] = (0, 255, 0),
+                   point_color: Tuple[int, int, int] = (255, 0, 0)) -> np.ndarray:
+    """
+    Draw MediaPipe Face Mesh with connections on frame.
+
+    Args:
+        frame: Input frame
+        landmarks: 468 face landmarks (normalized 0-1)
+        line_color: Color for mesh lines (BGR)
+        point_color: Color for landmark points (BGR)
+
+    Returns:
+        Frame with drawn mesh
+    """
+    h, w = frame.shape[:2]
+
+    # Draw connections first (so they appear behind points)
+    for start_idx, end_idx in FACE_MESH_FULL_CONNECTIONS:
+        if start_idx >= len(landmarks) or end_idx >= len(landmarks):
+            continue
+
+        start = landmarks[start_idx]
+        end = landmarks[end_idx]
+
+        # Skip if any z coordinate is NaN
+        if np.any(np.isnan(start)) or np.any(np.isnan(end)):
+            continue
+
+        x1 = int(start[0] * w)
+        y1 = int(start[1] * h)
+        x2 = int(end[0] * w)
+        y2 = int(end[1] * h)
+
+        cv2.line(frame, (x1, y1), (x2, y2), line_color, 1)
+
+    # Draw landmark points
+    for landmark in landmarks:
+        if np.any(np.isnan(landmark)):
+            continue
+
+        x = int(landmark[0] * w)
+        y = int(landmark[1] * h)
+        cv2.circle(frame, (x, y), 1, point_color, -1)
+
+    return frame
+
+
 def draw_face_landmarks(frame: np.ndarray,
                         landmarks: np.ndarray,
                         color: Tuple[int, int, int] = config.COLOR_NEUTRAL) -> np.ndarray:
-    """Draw face mesh landmarks on frame."""
+    """Draw face mesh landmarks on frame (just points)."""
     h, w = frame.shape[:2]
 
     for landmark in landmarks:
+        if np.any(np.isnan(landmark)):
+            continue
         x = int(landmark[0] * w)
         y = int(landmark[1] * h)
         cv2.circle(frame, (x, y), 1, color, -1)

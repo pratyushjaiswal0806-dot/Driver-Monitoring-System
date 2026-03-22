@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fleet Analytics | Sentinel Lens</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "error-container": "#93000a",
+                        "tertiary-fixed": "#ffdadb",
+                        "on-primary-container": "#008abb",
+                        "on-surface-variant": "#c6c6cd",
+                        "surface-dim": "#0c1324",
+                        "surface-tint": "#7bd0ff",
+                        "error": "#ffb4ab",
+                        "surface-container-lowest": "#070d1f",
+                        "outline": "#909097",
+                        "on-primary-fixed": "#001e2c",
+                        "outline-variant": "#45464d",
+                        "on-secondary": "#213145",
+                        "on-secondary-container": "#a9bad3",
+                        "primary-container": "#001a27",
+                        "on-primary-fixed-variant": "#004c69",
+                        "primary": "#7bd0ff",
+                        "secondary": "#b7c8e1",
+                        "tertiary-fixed-dim": "#ffb2b7",
+                        "secondary-fixed": "#d3e4fe",
+                        "primary-fixed": "#c4e7ff",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed-variant": "#92002a",
+                        "surface-container-low": "#151b2d",
+                        "secondary-fixed-dim": "#b7c8e1",
+                        "tertiary-container": "#39000b",
+                        "inverse-primary": "#00668a",
+                        "on-secondary-fixed": "#0b1c30",
+                        "primary-fixed-dim": "#7bd0ff",
+                        "secondary-container": "#3a4a5f",
+                        "on-tertiary-fixed": "#40000d",
+                        "on-primary": "#00354a",
+                        "on-tertiary": "#67001b",
+                        "on-error-container": "#ffdad6",
+                        "surface-container": "#191f31",
+                        "surface": "#0c1324",
+                        "on-surface": "#dce1fb",
+                        "surface-container-highest": "#2e3447",
+                        "inverse-on-surface": "#2a3043",
+                        "surface-bright": "#33394c",
+                        "background": "#0c1324",
+                        "surface-variant": "#2e3447",
+                        "surface-container-high": "#23293c",
+                        "tertiary": "#ffb2b7",
+                        "inverse-surface": "#dce1fb",
+                        "on-background": "#dce1fb",
+                        "on-tertiary-container": "#ee3a5a",
+                        "on-secondary-fixed-variant": "#38485d"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Manrope"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            backdrop-filter: blur(24px);
+            background: rgba(35, 41, 60, 0.4);
+        }
+        .glow-path {
+            filter: drop-shadow(0 0 4px currentColor);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body antialiased selection:bg-primary/30 selection:text-primary">
+<!-- SideNavBar Component -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r border-slate-800/50 bg-[#151b2d] dark:bg-slate-900 shadow-2xl shadow-black/50 z-[60] flex flex-col py-6 font-['Space_Grotesk'] tracking-tight">
+<div class="px-6 mb-10">
+<h1 class="text-xl font-bold tracking-widest text-[#7bd0ff] uppercase">Sentinel Lens</h1>
+<p class="text-[10px] text-secondary tracking-[0.2em] opacity-70">Operational Intelligence</p>
+</div>
+<nav class="flex-1 space-y-1 px-3">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-[#b7c8e1] hover:text-white hover:bg-[#23293c]/50" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-sm font-medium">Fleet Overview</span>
+</a>
+<!-- Active Tab: Alert History (Closest match to Analytics/Trends) -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-[#7bd0ff] bg-[#23293c] border-r-4 border-[#7bd0ff] font-bold active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined">warning</span>
+<span class="text-sm">Alert History</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-[#b7c8e1] hover:text-white hover:bg-[#23293c]/50" href="#">
+<span class="material-symbols-outlined">sensors</span>
+<span class="text-sm font-medium">Real-Time Telemetry</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-[#b7c8e1] hover:text-white hover:bg-[#23293c]/50" href="#">
+<span class="material-symbols-outlined">psychology</span>
+<span class="text-sm font-medium">Driver Behavior</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-[#b7c8e1] hover:text-white hover:bg-[#23293c]/50" href="#">
+<span class="material-symbols-outlined">health_and_safety</span>
+<span class="text-sm font-medium">System Health</span>
+</a>
+</nav>
+<div class="px-3 pt-6 border-t border-slate-800/50 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-[#b7c8e1] hover:text-white hover:bg-[#23293c]/50" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-sm font-medium">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-[#b7c8e1] hover:text-white hover:bg-[#23293c]/50" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="text-sm font-medium">Support</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Wrapper -->
+<main class="ml-64 min-h-screen flex flex-col">
+<!-- TopNavBar Component -->
+<header class="sticky top-0 z-50 w-full border-b border-slate-800/30 bg-[#0c1324]/80 backdrop-blur-xl flex justify-between items-center px-8 h-16 font-['Manrope'] font-medium">
+<div class="flex items-center gap-4">
+<span class="font-['Space_Grotesk'] font-bold text-[#7bd0ff] tracking-tighter text-lg">Driver Monitoring System</span>
+<div class="h-4 w-px bg-slate-800 mx-2"></div>
+<nav class="flex gap-6 text-sm">
+<a class="text-[#7bd0ff] border-b-2 border-[#7bd0ff] pb-1" href="#">Analytics</a>
+<a class="text-[#b7c8e1] hover:text-white transition-colors pb-1" href="#">Live Feed</a>
+<a class="text-[#b7c8e1] hover:text-white transition-colors pb-1" href="#">Archive</a>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative group">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline text-sm">search</span>
+<input class="bg-surface-container-lowest border-none rounded-full py-1.5 pl-10 pr-4 text-sm w-64 focus:ring-1 focus:ring-[#7bd0ff]/30 transition-all placeholder:text-outline/50" placeholder="Search fleet..." type="text"/>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-[#7bd0ff] hover:bg-white/5 p-2 rounded-full transition-all">refresh</button>
+<button class="material-symbols-outlined text-[#b7c8e1] hover:bg-white/5 p-2 rounded-full transition-all relative">
+                        notifications
+                        <span class="absolute top-2 right-2 w-2 h-2 bg-tertiary rounded-full"></span>
+</button>
+<button class="material-symbols-outlined text-[#b7c8e1] hover:bg-white/5 p-2 rounded-full transition-all">account_circle</button>
+</div>
+</div>
+</header>
+<!-- Content Canvas -->
+<div class="p-8 space-y-8 max-w-[1600px] mx-auto w-full">
+<!-- Hero & Controls Section -->
+<section class="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-outline-variant/10 pb-8">
+<div>
+<span class="text-primary font-label text-[10px] tracking-widest uppercase mb-2 block">Enterprise Intelligence</span>
+<h2 class="text-4xl font-headline font-bold text-on-surface tracking-tight">Fleet-wide trends</h2>
+<p class="text-secondary mt-2 max-w-xl font-light">Comprehensive analysis of behavioral risk patterns and operational efficiency metrics across the active transport fleet.</p>
+</div>
+<div class="flex bg-surface-container-low p-1 rounded-xl glass-card">
+<button class="px-6 py-2 rounded-lg text-xs font-bold transition-all bg-primary/10 text-primary border border-primary/20">7 DAYS</button>
+<button class="px-6 py-2 rounded-lg text-xs font-medium text-secondary hover:text-on-surface transition-all">30 DAYS</button>
+<button class="px-6 py-2 rounded-lg text-xs font-medium text-secondary hover:text-on-surface transition-all">90 DAYS</button>
+</div>
+</section>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Main Trend: Daily Total Alerts -->
+<div class="col-span-12 lg:col-span-8 bg-surface-container-high rounded-xl p-6 glass-card relative overflow-hidden">
+<div class="flex justify-between items-start mb-8">
+<div>
+<h3 class="text-sm font-headline font-semibold text-secondary uppercase tracking-wider">Daily Total Alerts</h3>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-headline font-bold text-on-surface">1,402</span>
+<span class="text-xs text-error font-label flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">trending_up</span>
+                                    +12.4%
+                                </span>
+</div>
+</div>
+<div class="flex gap-2">
+<span class="w-3 h-3 rounded-full bg-primary inline-block"></span>
+<span class="text-[10px] font-label text-outline uppercase">Critical Events</span>
+</div>
+</div>
+<!-- Simplified Visual Chart Representation -->
+<div class="h-64 flex items-end gap-2 px-2">
+<div class="w-full bg-primary/10 rounded-t-sm relative group h-[40%]">
+<div class="absolute inset-0 bg-primary/20 group-hover:bg-primary/40 transition-all"></div>
+</div>
+<div class="w-full bg-primary/10 rounded-t-sm relative group h-[55%]"></div>
+<div class="w-full bg-primary/10 rounded-t-sm relative group h-[45%]"></div>
+<div class="w-full bg-primary/10 rounded-t-sm relative group h-[70%]"></div>
+<div class="w-full bg-primary/10 rounded-t-sm relative group h-[60%]"></div>
+<div class="w-full bg-primary/10 rounded-t-sm relative group h-[85%]">
+<div class="absolute inset-x-0 bottom-full mb-2 bg-surface-bright text-[10px] font-mono p-1 rounded border border-outline/20 text-center opacity-0 group-hover:opacity-100 transition-opacity">1,402</div>
+</div>
+<div class="w-full bg-primary/10 rounded-t-sm relative group h-[75%]"></div>
+</div>
+<div class="flex justify-between mt-4 px-2">
+<span class="text-[10px] font-label text-outline/50 uppercase tracking-tighter">Mon, 12 Oct</span>
+<span class="text-[10px] font-label text-outline/50 uppercase tracking-tighter">Sun, 18 Oct</span>
+</div>
+</div>
+<!-- Average Risk Score -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container-high rounded-xl p-6 glass-card flex flex-col justify-between">
+<div>
+<h3 class="text-sm font-headline font-semibold text-secondary uppercase tracking-wider mb-6">Daily Avg. Risk Score</h3>
+<div class="relative w-48 h-48 mx-auto">
+<!-- SVG Gauge -->
+<svg class="w-full h-full -rotate-90" viewbox="0 0 100 100">
+<circle cx="50" cy="50" fill="transparent" r="40" stroke="#151b2d" stroke-width="8"></circle>
+<circle class="glow-path" cx="50" cy="50" fill="transparent" r="40" stroke="url(#riskGradient)" stroke-dasharray="188.5" stroke-dashoffset="60" stroke-linecap="round" stroke-width="8"></circle>
+<defs>
+<lineargradient id="riskGradient" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" stop-color="#7bd0ff"></stop>
+<stop offset="100%" stop-color="#ffb4ab"></stop>
+</lineargradient>
+</defs>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-4xl font-headline font-bold text-on-surface">64</span>
+<span class="text-[10px] font-label text-secondary uppercase tracking-widest">Elevated</span>
+</div>
+</div>
+</div>
+<div class="mt-8 space-y-3">
+<div class="flex justify-between text-xs">
+<span class="text-outline">Last 7 days avg</span>
+<span class="text-on-surface font-semibold">58</span>
+</div>
+<div class="w-full bg-surface-container-lowest h-1.5 rounded-full overflow-hidden">
+<div class="bg-secondary h-full w-[58%]"></div>
+</div>
+<p class="text-[10px] text-tertiary font-medium">Risk exposure has increased by 10.3% this period.</p>
+</div>
+</div>
+<!-- Fleet Risk Distribution -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container-high rounded-xl p-6 glass-card">
+<h3 class="text-sm font-headline font-semibold text-secondary uppercase tracking-wider mb-6">Fleet Risk Distribution</h3>
+<div class="space-y-6">
+<div class="space-y-2">
+<div class="flex justify-between text-xs">
+<span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-primary"></span> Safe (0-30)</span>
+<span class="font-mono text-outline">242 Vehicles</span>
+</div>
+<div class="w-full h-8 bg-surface-container-lowest rounded-lg overflow-hidden flex">
+<div class="h-full bg-primary/40 w-[65%] border-r border-background"></div>
+<div class="h-full bg-transparent w-[35%]"></div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs">
+<span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-secondary"></span> Caution (31-70)</span>
+<span class="font-mono text-outline">84 Vehicles</span>
+</div>
+<div class="w-full h-8 bg-surface-container-lowest rounded-lg overflow-hidden flex">
+<div class="h-full bg-secondary/40 w-[25%] border-r border-background"></div>
+<div class="h-full bg-transparent w-[75%]"></div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs">
+<span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-tertiary"></span> Critical (71+)</span>
+<span class="font-mono text-outline">12 Vehicles</span>
+</div>
+<div class="w-full h-8 bg-surface-container-lowest rounded-lg overflow-hidden flex">
+<div class="h-full bg-tertiary/40 w-[10%] border-r border-background"></div>
+<div class="h-full bg-transparent w-[90%]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Hourly Alert Distribution -->
+<div class="col-span-12 lg:col-span-5 bg-surface-container-high rounded-xl p-6 glass-card">
+<h3 class="text-sm font-headline font-semibold text-secondary uppercase tracking-wider mb-6">Hourly Alert Intensity</h3>
+<div class="grid grid-cols-24 gap-1 h-32 items-end">
+<!-- Hour Bars (Simplified) -->
+<div class="bg-primary/20 h-4 rounded-sm"></div>
+<div class="bg-primary/20 h-2 rounded-sm"></div>
+<div class="bg-primary/20 h-1 rounded-sm"></div>
+<div class="bg-primary/20 h-2 rounded-sm"></div>
+<div class="bg-primary/20 h-8 rounded-sm"></div>
+<div class="bg-primary/40 h-16 rounded-sm"></div>
+<div class="bg-primary/60 h-24 rounded-sm"></div>
+<div class="bg-primary/80 h-32 rounded-sm"></div>
+<div class="bg-tertiary/80 h-28 rounded-sm"></div>
+<div class="bg-primary/80 h-20 rounded-sm"></div>
+<div class="bg-primary/60 h-18 rounded-sm"></div>
+<div class="bg-primary/40 h-16 rounded-sm"></div>
+<div class="bg-primary/60 h-20 rounded-sm"></div>
+<div class="bg-primary/80 h-28 rounded-sm"></div>
+<div class="bg-tertiary/80 h-32 rounded-sm"></div>
+<div class="bg-primary/80 h-24 rounded-sm"></div>
+<div class="bg-primary/60 h-16 rounded-sm"></div>
+<div class="bg-primary/40 h-10 rounded-sm"></div>
+<div class="bg-primary/20 h-8 rounded-sm"></div>
+<div class="bg-primary/20 h-12 rounded-sm"></div>
+<div class="bg-primary/20 h-10 rounded-sm"></div>
+<div class="bg-primary/20 h-6 rounded-sm"></div>
+<div class="bg-primary/20 h-4 rounded-sm"></div>
+<div class="bg-primary/20 h-2 rounded-sm"></div>
+</div>
+<div class="flex justify-between mt-4">
+<span class="text-[9px] font-label text-outline uppercase tracking-widest">00:00</span>
+<span class="text-[9px] font-label text-outline uppercase tracking-widest">12:00</span>
+<span class="text-[9px] font-label text-outline uppercase tracking-widest">23:59</span>
+</div>
+</div>
+<!-- Top Alert Triggers -->
+<div class="col-span-12 lg:col-span-3 bg-surface-container-high rounded-xl p-6 glass-card">
+<h3 class="text-sm font-headline font-semibold text-secondary uppercase tracking-wider mb-6">Critical Triggers</h3>
+<ul class="space-y-4">
+<li class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-tertiary bg-tertiary/10 p-2 rounded-lg text-lg">visibility_off</span>
+<span class="text-xs text-on-surface font-medium">Microsleep</span>
+</div>
+<span class="text-xs font-mono text-outline">42%</span>
+</li>
+<li class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#7bd0ff] bg-primary/10 p-2 rounded-lg text-lg">smartphone</span>
+<span class="text-xs text-on-surface font-medium">Distraction</span>
+</div>
+<span class="text-xs font-mono text-outline">28%</span>
+</li>
+<li class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary bg-secondary/10 p-2 rounded-lg text-lg">smoking_rooms</span>
+<span class="text-xs text-on-surface font-medium">Smoking</span>
+</div>
+<span class="text-xs font-mono text-outline">15%</span>
+</li>
+<li class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary bg-secondary/10 p-2 rounded-lg text-lg">fastfood</span>
+<span class="text-xs text-on-surface font-medium">Eating/Drinking</span>
+</div>
+<span class="text-xs font-mono text-outline">15%</span>
+</li>
+</ul>
+</div>
+<!-- Comparison Table / Details -->
+<div class="col-span-12 bg-surface-container-low rounded-xl overflow-hidden">
+<div class="px-6 py-4 bg-surface-container-high/50 flex justify-between items-center border-b border-outline-variant/10">
+<h3 class="text-sm font-headline font-semibold text-secondary uppercase tracking-wider">Top Fleet Performers (Shift Variance)</h3>
+<button class="text-[10px] text-primary font-bold flex items-center gap-1 hover:underline">
+                            EXPORT DATA <span class="material-symbols-outlined text-sm">download</span>
+</button>
+</div>
+<table class="w-full text-left text-sm">
+<thead>
+<tr class="text-[10px] font-label text-outline uppercase tracking-[0.15em] border-b border-outline-variant/5">
+<th class="px-6 py-4 font-normal">Fleet ID / Driver</th>
+<th class="px-6 py-4 font-normal">Active Hours</th>
+<th class="px-6 py-4 font-normal">Alert Frequency</th>
+<th class="px-6 py-4 font-normal">Risk Shift (v. Prev)</th>
+<th class="px-6 py-4 font-normal text-right">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/5">
+<tr class="hover:bg-surface-container-highest transition-colors group">
+<td class="px-6 py-4">
+<div class="flex flex-col">
+<span class="font-medium text-on-surface group-hover:text-primary transition-colors">VX-702-AL</span>
+<span class="text-[10px] text-outline">Marcus Thorne</span>
+</div>
+</td>
+<td class="px-6 py-4 font-mono text-secondary">156.4h</td>
+<td class="px-6 py-4 font-mono text-secondary">0.12/hr</td>
+<td class="px-6 py-4">
+<span class="text-primary font-medium flex items-center gap-1 text-xs">
+<span class="material-symbols-outlined text-sm">arrow_downward</span>
+                                        -8.2%
+                                    </span>
+</td>
+<td class="px-6 py-4 text-right">
+<span class="px-3 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-full border border-primary/20">NOMINAL</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-highest transition-colors group">
+<td class="px-6 py-4">
+<div class="flex flex-col">
+<span class="font-medium text-on-surface">VX-118-BT</span>
+<span class="text-[10px] text-outline">Sarah Jenkins</span>
+</div>
+</td>
+<td class="px-6 py-4 font-mono text-secondary">142.1h</td>
+<td class="px-6 py-4 font-mono text-secondary">0.84/hr</td>
+<td class="px-6 py-4">
+<span class="text-tertiary font-medium flex items-center gap-1 text-xs">
+<span class="material-symbols-outlined text-sm">arrow_upward</span>
+                                        +24.1%
+                                    </span>
+</td>
+<td class="px-6 py-4 text-right">
+<span class="px-3 py-1 bg-error-container text-on-error-container text-[10px] font-bold rounded-full shadow-[0_0_10px_rgba(255,180,171,0.2)]">CRITICAL</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-highest transition-colors group">
+<td class="px-6 py-4">
+<div class="flex flex-col">
+<span class="font-medium text-on-surface">VX-993-KL</span>
+<span class="text-[10px] text-outline">Olaf Svenson</span>
+</div>
+</td>
+<td class="px-6 py-4 font-mono text-secondary">168.0h</td>
+<td class="px-6 py-4 font-mono text-secondary">0.45/hr</td>
+<td class="px-6 py-4">
+<span class="text-outline font-medium flex items-center gap-1 text-xs italic">
+<span class="material-symbols-outlined text-sm">drag_handle</span>
+                                        STABLE
+                                    </span>
+</td>
+<td class="px-6 py-4 text-right">
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-[10px] font-bold rounded-full border border-secondary/20">CAUTION</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Footer -->
+<footer class="mt-auto p-8 border-t border-outline-variant/10 text-center">
+<p class="text-[10px] font-label text-outline/40 tracking-[0.3em] uppercase">Sentinel Lens Analytics Engine v4.2.0 • Real-Time Core Active</p>
+</footer>
+</main>
+</body></html>

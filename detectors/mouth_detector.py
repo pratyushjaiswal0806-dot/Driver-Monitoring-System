@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Optional
 
 import config
-from utils.math_utils import calculate_mar, StateDurationTracker
+from utils.math_utils import calculate_mar, StateDurationTracker, TemporalSmoother
 
 
 class MouthState(Enum):
@@ -44,8 +44,12 @@ class MouthDetector:
         self.baseline_mar: float = self.mar_threshold
         self.calibrated = False
 
+        # Temporal smoothing for MAR (reduces jitter sensitivity)
+        self.mar_smoother = TemporalSmoother(alpha=config.SMOOTHING_ALPHA)
+
         # Yawn tracking
-        self.yawn_tracker = StateDurationTracker(config.MOUTH_OPEN_ALERT_FRAMES)
+        self.yawn_tracker = StateDurationTracker(
+            config.MOUTH_OPEN_ALERT_FRAMES)
         self.is_yawning = False
         self.yawn_count = 0
         self.yawn_start_time = None
@@ -75,50 +79,58 @@ class MouthDetector:
             self.yawn_threshold = driver_profile.mar_yawn_threshold
             self.calibrated = True
 
-        # Calculate MAR
+        # Calculate MAR (raw)
         mar_indices = [config.MOUTH_TOP, config.MOUTH_BOTTOM,
                        config.MOUTH_LEFT, config.MOUTH_RIGHT]
-        mar = calculate_mar(landmarks, mar_indices)
+        mar_raw = calculate_mar(landmarks, mar_indices)
 
-        # Store for calibration
+        # Apply temporal smoothing to reduce jitter sensitivity
+        mar = self.mar_smoother.update(mar_raw)
+
+        # Store raw MAR for calibration
         if not self.calibrated:
-            self.mar_history.append(mar)
+            self.mar_history.append(mar_raw)
             if len(self.mar_history) > 100:
                 self.mar_history = self.mar_history[-100:]
 
-        # Calculate thresholds based on baseline
-        close_threshold = self.baseline_mar * 1.2
-        yawn_end_threshold = self.baseline_mar * 1.3
+        # Calculate state-dependent thresholds with hysteresis
+        # Threshold for mouth closing (lower threshold for exiting yawning state)
+        yawn_end_threshold = self.baseline_mar * \
+            1.2  # More aggressive closing threshold
 
-        # Determine state
-        if mar < close_threshold:  # Closed/normal
+        # Determine state based on smoothed MAR
+        if mar < self.baseline_mar * 1.1:  # Mouth clearly closed
             state = MouthState.CLOSED
             is_open = False
-        elif mar < self.yawn_threshold:
-            state = MouthState.NORMAL  # Slightly open
+        elif mar < self.yawn_threshold:  # Mouth slightly open (normal)
+            state = MouthState.NORMAL
             is_open = True
-        else:
-            state = MouthState.YAWNING  # Wide open (yawn)
+        else:  # Mouth wide open (yawning)
+            state = MouthState.YAWNING
             is_open = True
 
         # Track yawn duration - need to be above yawn threshold for consecutive frames
-        yawn_triggered = self.yawn_tracker.update(is_open and mar >= self.yawn_threshold)
+        # This triggers when threshold is first exceeded
+        yawn_triggered = self.yawn_tracker.update(mar >= self.yawn_threshold)
 
-        # Count yawns
-        was_yawning = self.is_yawning
+        # Yawn state machine with proper transitions
         if yawn_triggered and not self.is_yawning:
-            # Yawn started
+            # Yawn just started (threshold exceeded for required frames)
             self.is_yawning = True
             self.yawn_count += 1
             if self.DEBUG:
-                print(f"[MOUTH] Yawn #{self.yawn_count} started! MAR={mar:.3f}, threshold={self.yawn_threshold:.3f}")
+                print(f"[MOUTH] Yawn #{self.yawn_count} started! MAR={mar:.3f} (raw={mar_raw:.3f}), "
+                      f"threshold={self.yawn_threshold:.3f}")
 
-        if not is_open or mar < yawn_end_threshold:
-            # Yawn ended
-            if self.is_yawning:
-                if self.DEBUG:
-                    print(f"[MOUTH] Yawn ended. Duration: {self.yawn_tracker.consecutive_frames/config.TARGET_FPS:.2f}s")
+        # Yawn ends only when mouth closes significantly (drops below lower threshold)
+        # Not just when it drops below yawn threshold temporarily
+        if self.is_yawning and mar < yawn_end_threshold:
+            # Yawn ended (mouth closed)
+            if self.DEBUG:
+                print(f"[MOUTH] Yawn ended. Duration: {self.yawn_tracker.consecutive_frames/config.TARGET_FPS:.2f}s, "
+                      f"MAR={mar:.3f} (raw={mar_raw:.3f})")
             self.is_yawning = False
+            self.yawn_tracker.reset()
 
         # Calculate yawn duration in seconds
         yawn_duration = (self.yawn_tracker.consecutive_frames / config.TARGET_FPS
@@ -126,8 +138,10 @@ class MouthDetector:
 
         # Debug output
         if self.DEBUG and self.frame_count % self.DEBUG_INTERVAL == 0:
-            print(f"[MOUTH] MAR={mar:.3f}, state={state.value}, threshold={self.yawn_threshold:.3f}, "
-                  f"baseline={self.baseline_mar:.3f}, close_thresh={close_threshold:.3f}")
+            yawn_end_threshold = self.baseline_mar * 1.2
+            print(f"[MOUTH] MAR={mar:.3f} (raw={mar_raw:.3f}), state={state.value}, "
+                  f"yawn_threshold={self.yawn_threshold:.3f}, "
+                  f"baseline={self.baseline_mar:.3f}, yawn_end_threshold={yawn_end_threshold:.3f}")
 
         return MouthResult(
             mar=mar,
@@ -170,6 +184,7 @@ class MouthDetector:
     def reset(self):
         """Reset detector state."""
         self.yawn_tracker.reset()
+        self.mar_smoother.reset()
         self.is_yawning = False
         self.yawn_count = 0
         self.mar_history.clear()

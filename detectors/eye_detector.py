@@ -6,7 +6,7 @@ from typing import Optional
 from enum import Enum
 import time
 
-from utils.math_utils import calculate_ear, StateDurationTracker
+from utils.math_utils import calculate_normalized_ear, StateDurationTracker
 import config
 
 
@@ -38,10 +38,11 @@ class EyeDetector:
                  ear_closed_threshold: float = None):
         # Use calibrated thresholds or defaults
         self.ear_threshold = ear_threshold or config.DEFAULT_EAR_THRESHOLD
-        self.ear_closed_threshold = ear_threshold or config.DEFAULT_EAR_CLOSED_THRESHOLD
+        self.ear_closed_threshold = ear_closed_threshold or config.DEFAULT_EAR_CLOSED_THRESHOLD
 
         # State tracking
-        self.closed_tracker = StateDurationTracker(config.EYES_CLOSED_ALERT_FRAMES)
+        self.closed_tracker = StateDurationTracker(
+            config.EYES_CLOSED_ALERT_FRAMES)
         self.blink_tracker = StateDurationTracker(config.BLINK_MIN_FRAMES)
 
         # Blink counting
@@ -74,14 +75,20 @@ class EyeDetector:
             EyeResult with state and metrics
         """
         # Use driver's personal thresholds if calibrated
+        reference_iod = None
         if driver_profile and driver_profile.is_calibrated:
             self.ear_threshold = driver_profile.ear_closed_threshold
             self.calibrated = True
             self.baseline_ear = driver_profile.ear_mean
+            reference_iod = getattr(driver_profile, 'baseline_iod', None)
+            if reference_iod is not None and reference_iod <= 0:
+                reference_iod = None
 
-        # Calculate EAR for both eyes
-        left_ear = calculate_ear(landmarks, config.LEFT_EYE_INDICES)
-        right_ear = calculate_ear(landmarks, config.RIGHT_EYE_INDICES)
+        # Calculate scale-stable EAR for both eyes
+        left_ear = calculate_normalized_ear(
+            landmarks, config.LEFT_EYE_INDICES, reference_iod=reference_iod)
+        right_ear = calculate_normalized_ear(
+            landmarks, config.RIGHT_EYE_INDICES, reference_iod=reference_iod)
         avg_ear = (left_ear + right_ear) / 2.0
 
         # Store for calibration
@@ -95,8 +102,9 @@ class EyeDetector:
             state = EyeState.CLOSED
             is_closed = True
         elif avg_ear < self.ear_threshold:
-            state = EyeState.CLOSED  # Threshold zone
-            is_closed = True
+            # Bug fix: Was incorrectly setting to CLOSED. Now properly transitions through thresholds
+            state = EyeState.OPEN  # In threshold zone but not fully closed
+            is_closed = False
         else:
             state = EyeState.OPEN
             is_closed = False
@@ -155,7 +163,8 @@ class EyeDetector:
                 self.blink_history.append(time.time())
                 # Keep last 60 seconds of blink history
                 cutoff = time.time() - 60
-                self.blink_history = [b for b in self.blink_history if b > cutoff]
+                self.blink_history = [
+                    b for b in self.blink_history if b > cutoff]
 
         self.prev_state = current_state
 
@@ -168,7 +177,18 @@ class EyeDetector:
     def get_blink_rate(self) -> float:
         """Get blink rate (blinks per minute)."""
         recent_blinks = len(self.blink_history)
-        return recent_blinks * 1.0  # Already filtered to last 60s
+        # Bug fix: Normalize to per-minute (blinks in last 60s * 60 / 60 = just count)
+        # But since history is already filtered to last 60s, we need to scale appropriately
+        if not self.blink_history:
+            return 0.0
+        # Calculate actual time span covered by blink history
+        if len(self.blink_history) < 2:
+            return 0.0
+        time_span = self.blink_history[-1] - self.blink_history[0]
+        if time_span < 1.0:
+            return 0.0
+        # Blinks per minute
+        return (recent_blinks / time_span) * 60.0
 
     def calibrate(self, driver_profile=None) -> dict:
         """
